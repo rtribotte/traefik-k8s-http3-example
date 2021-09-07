@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik-ingress-controller
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: traefik
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      containers:
+        - name: traefik
+          image: traefik/traefik:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --log.level=DEBUG
+            - --api.insecure
+            - --entrypoints.websecure.address=:8443
+            - --providers.kubernetescrd
+            - --experimental.http3=true
+            - --entrypoints.websecure.http3.enabled=true
+            - --entrypoints.websecure.http3.advertisedport=443
+          ports:
+            - name: websecure
+              containerPort: 8443
+              protocol: TCP
+            - name: websecure-udp
+              containerPort: 8443
+              protocol: UDP
+            - name: admin
+              containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-tcp
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  ports:
+    - protocol: TCP
+      port: 443
+      name: websecure
+      targetPort: 8443
+
+    - protocol: TCP
+      port: 8080
+      name: admin
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-udp
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  ports:
+    - protocol: UDP
+      port: 443
+      name: websecure-udp
+      targetPort: 8443
